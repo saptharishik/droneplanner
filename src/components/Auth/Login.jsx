@@ -42,7 +42,7 @@ const DroneMissionPlanner = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900">
+    <div className="flex flex-col h-screen bg-gray-900 sm:w-[1920px] w-full">
       {/* Header/Nav Bar with Battery */}
       <div className="bg-blue-900 py-2 px-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
