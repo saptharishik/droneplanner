@@ -240,8 +240,9 @@ const DroneMissionPlanner = () => {
     const normalizedPitch = ((droneData.pitch % 360) + 360) % 360;
     const normalizedRoll = ((droneData.roll % 360) + 360) % 360;
     
+    // Note: Using positive yaw value for correct rotation direction
     return {
-      transform: `perspective(1000px) rotateX(${-normalizedPitch}deg) rotateY(${normalizedRoll}deg) rotateZ(${-normalizedYaw}deg)`
+      transform: `perspective(1000px) rotateX(${-normalizedPitch}deg) rotateY(${normalizedRoll}deg) rotateZ(${normalizedYaw}deg)`
     };
   };
   
