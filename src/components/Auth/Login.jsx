@@ -88,7 +88,7 @@ const DroneMissionPlanner = () => {
         setDroneData(prev => ({...prev, yaw: (prev.yaw + 10) % 360}));
         break;
       case 'reset':
-        setDroneData(prev => ({...prev, yaw: 0, throttlePercent: 45})); // Reset throttle to default
+        setDroneData(prev => ({...prev, yaw: 0, throttlePercent:0})); // Reset throttle to default
         break;
       default:
         break;
