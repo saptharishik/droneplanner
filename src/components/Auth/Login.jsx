@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Battery, 
   AlertTriangle, 
@@ -7,7 +7,6 @@ import {
   Compass, 
   ChevronRight,
   X,
-  ThermometerSun,
   MapPin,
   BarChart3,
   Wind
@@ -42,11 +41,124 @@ const DroneMissionPlanner = () => {
     throttlePercent: 45,
     heading: 330,
     homeDistance: 125,
-    gpsSignal: 8, // Number of satellites
-    temperature: 28
+    opticalX: 0.02,
+    opticalY: -0.03
   });
 
   const flightModes = ['Land', 'Stabilize', 'AltHold', 'FlowHold', 'Loiter', 'RTL', 'Auto'];
+
+  // Direction control handler
+  const handleDirection = useCallback((direction) => {
+    switch(direction) {
+      case 'forward':
+        setDroneData(prev => ({...prev, pitch: ((prev.pitch - 5) % 360 + 360) % 360}));
+        break;
+      case 'backward':
+        setDroneData(prev => ({...prev, pitch: ((prev.pitch + 5) % 360 + 360) % 360}));
+        break;
+      case 'left':
+        setDroneData(prev => ({...prev, roll: ((prev.roll - 5) % 360 + 360) % 360}));
+        break;
+      case 'right':
+        setDroneData(prev => ({...prev, roll: ((prev.roll + 5) % 360 + 360) % 360}));
+        break;
+      case 'reset':
+        setDroneData(prev => ({...prev, pitch: 0, roll: 0}));
+        break;
+      default:
+        break;
+    }
+  }, []);
+
+  // Height and yaw control handler
+  const handleHeightYaw = useCallback((action) => {
+    switch(action) {
+      case 'up':
+        setDroneData(prev => ({...prev, altitude: prev.altitude + 5}));
+        break;
+      case 'down':
+        setDroneData(prev => ({...prev, altitude: prev.altitude - 5}));
+        break;
+      case 'rotateLeft':
+        setDroneData(prev => ({...prev, yaw: ((prev.yaw - 10) % 360 + 360) % 360}));
+        break;
+      case 'rotateRight':
+        setDroneData(prev => ({...prev, yaw: (prev.yaw + 10) % 360}));
+        break;
+      case 'reset':
+        setDroneData(prev => ({...prev, yaw: 0}));
+        break;
+      default:
+        break;
+    }
+  }, []);
+
+  // Global reset handler
+  const handleGlobalReset = useCallback(() => {
+    handleDirection('reset');
+    handleHeightYaw('reset');
+  }, [handleDirection, handleHeightYaw]);
+
+  // Keyboard control listener
+  useEffect(() => {
+    const keyHandler = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        return; // Don't handle keys when user is typing in form elements
+      }
+
+      // Prevent default behavior for these keys to avoid scrolling etc.
+      if (['w', 'a', 's', 'd', 'i', 'j', 'k', 'l', ' ', '8', '2', '4', '6'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+
+      switch(e.key.toLowerCase()) {
+        // Direction controls (WASD)
+        case 'w':
+          handleDirection('forward');
+          break;
+        case 's':
+          handleDirection('backward');
+          break;
+        case 'a':
+          handleDirection('left');
+          break;
+        case 'd':
+          handleDirection('right');
+          break;
+          
+        // Height/Yaw controls (IJKL and numeric pad)
+        case 'i':
+        case '8':
+          handleHeightYaw('up');
+          break;
+        case 'k':
+        case '2':
+          handleHeightYaw('down');
+          break;
+        case 'j':
+        case '4':
+          handleHeightYaw('rotateLeft');
+          break;
+        case 'l':
+        case '6':
+          handleHeightYaw('rotateRight');
+          break;
+        
+        // Space for global reset
+        case ' ':
+          handleGlobalReset();
+          break;
+        
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', keyHandler);
+    return () => {
+      window.removeEventListener('keydown', keyHandler);
+    };
+  }, [handleDirection, handleHeightYaw, handleGlobalReset]);
 
   // Simulate connection and data updates
   useEffect(() => {
@@ -73,7 +185,7 @@ const DroneMissionPlanner = () => {
       }
     }, 2000);
     
-    // Simulate data updates from "backend"
+          // Simulate data updates from "backend"
     const dataUpdateInterval = setInterval(() => {
       if (connected && !droneData.disarmed) {
         // Only update if connected and armed
@@ -83,7 +195,14 @@ const DroneMissionPlanner = () => {
           velocity: Math.max(0, prev.velocity + (Math.random() * 0.6 - 0.3)),
           xAxis: prev.xAxis + (Math.random() * 0.2 - 0.1),
           yAxis: prev.yAxis + (Math.random() * 0.2 - 0.1),
-          throttlePercent: Math.min(100, Math.max(0, prev.throttlePercent + (Math.random() * 2 - 1)))
+          // Ensure all rotation values always wrap properly
+          pitch: ((prev.pitch + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360,
+          roll: ((prev.roll + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360,
+          yaw: ((prev.yaw + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360,
+          heading: ((prev.heading + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360,
+          throttlePercent: Math.min(100, Math.max(0, prev.throttlePercent + (Math.random() * 2 - 1))),
+          opticalX: prev.opticalX + (Math.random() * 0.02 - 0.01),
+          opticalY: prev.opticalY + (Math.random() * 0.02 - 0.01)
         }));
         
         // Gradually decrease battery
@@ -116,8 +235,13 @@ const DroneMissionPlanner = () => {
 
   // Get rotation style for orientation visualization
   const getRotationStyle = () => {
+    // Ensure yaw, pitch, and roll are properly bounded for smooth visualization
+    const normalizedYaw = ((droneData.yaw % 360) + 360) % 360;
+    const normalizedPitch = ((droneData.pitch % 360) + 360) % 360;
+    const normalizedRoll = ((droneData.roll % 360) + 360) % 360;
+    
     return {
-      transform: `perspective(1000px) rotateX(${-droneData.pitch}deg) rotateY(${droneData.roll}deg) rotateZ(${-droneData.yaw+180}deg)`
+      transform: `perspective(1000px) rotateX(${-normalizedPitch}deg) rotateY(${normalizedRoll}deg) rotateZ(${-normalizedYaw}deg)`
     };
   };
   
@@ -220,19 +344,19 @@ const DroneMissionPlanner = () => {
                 className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'side-by-side' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
                 onClick={() => setCameraView('side-by-side')}
               >
-                Live feed and orientation
+                Side by Side
               </button>
               <button 
                 className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'live' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
                 onClick={() => setCameraView('live')}
               >
-                Live Feed
+                Live Feed Only
               </button>
               <button 
                 className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'orientation' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
                 onClick={() => setCameraView('orientation')}
               >
-                Orientation 
+                Orientation Only
               </button>
             </div>
           </div>
@@ -510,70 +634,151 @@ const DroneMissionPlanner = () => {
                          'red'
                 }}
               />
-              <DataTile title="GPS Signal" value={droneData.gpsSignal} unit=" sats" />
-              <DataTile title="Temperature" value={droneData.temperature} unit="°C" icon={<ThermometerSun size={16} />} />
+              <DataTile title="Optical X" value={droneData.opticalX.toFixed(3)} unit="m/s" />
+              <DataTile title="Optical Y" value={droneData.opticalY.toFixed(3)} unit="m/s" />
             </div>
           </div>
+          
+
           
           {/* Attitude Control Panel */}
           <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
             <h2 className="text-lg font-bold text-blue-400 mb-2">Attitude Controls</h2>
             
-            <div className="grid grid-cols-3 gap-2">
-              <button 
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-1 rounded-lg"
-                onClick={() => setDroneData({...droneData, pitch: droneData.pitch + 5})}
-              >
-                Pitch +5°
-              </button>
-              <button
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-1 rounded-lg"
-                onClick={() => setDroneData({...droneData, pitch: droneData.pitch - 5})}
-              >
-                Pitch -5°
-              </button>
-              <button
-                className="bg-blue-800 hover:bg-blue-900 text-white py-2 px-1 rounded-lg"
-                onClick={() => setDroneData({...droneData, pitch: 0})}
-              >
-                Reset Pitch
-              </button>
-              <button
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-1 rounded-lg"
-                onClick={() => setDroneData({...droneData, roll: droneData.roll + 5})}
-              >
-                Roll +5°
-              </button>
-              <button
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-1 rounded-lg"
-                onClick={() => setDroneData({...droneData, roll: droneData.roll - 5})}
-              >
-                Roll -5°
-              </button>
-              <button
-                className="bg-blue-800 hover:bg-blue-900 text-white py-2 px-1 rounded-lg" 
-                onClick={() => setDroneData({...droneData, roll: 0})}
-              >
-                Reset Roll
-              </button>
-              <button
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-1 rounded-lg"
-                onClick={() => setDroneData({...droneData, yaw: (droneData.yaw + 10) % 360})}
-              >
-                Yaw +10°
-              </button>
-              <button
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-1 rounded-lg"
-                onClick={() => setDroneData({...droneData, yaw: (droneData.yaw - 10 + 360) % 360})}
-              >
-                Yaw -10°
-              </button>
-              <button
-                className="bg-blue-800 hover:bg-blue-900 text-white py-2 px-1 rounded-lg"
-                onClick={() => setDroneData({...droneData, yaw: 0})}
-              >
-                Reset Yaw
-              </button>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Direction Controls */}
+              <div className="bg-gray-700 p-3 rounded-lg">
+                <div className="text-blue-300 text-sm mb-2 text-center font-medium group relative">
+                  Direction
+                  <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-80 text-white text-xs rounded p-2 -bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none w-48 z-10">
+                    <div className="flex justify-between mb-1">
+                      <span>W - Forward</span>
+                      <span>S - Backward</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>A - Left</span>
+                      <span>D - Right</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  {/* Top row (W) */}
+                  <div className="w-full flex justify-center">
+                    <button 
+                      className="bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg font-bold"
+                      onClick={(e) => {e.preventDefault(); handleDirection('forward');}}
+                      title="W - Forward"
+                    >
+                      W
+                    </button>
+                  </div>
+                  
+                  {/* Middle row (A, RESET, D) */}
+                  <div className="w-full flex justify-between items-center">
+                    <button 
+                      className="bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg font-bold"
+                      onClick={(e) => {e.preventDefault(); handleDirection('left');}}
+                      title="A - Left"
+                    >
+                      A
+                    </button>
+                    
+                    <button 
+                      className="bg-blue-800 hover:bg-blue-700 text-white w-12 h-12 flex items-center justify-center rounded-lg text-xs"
+                      onClick={(e) => {e.preventDefault(); handleDirection('reset');}}
+                      title="Reset Direction"
+                    >
+                      RESET
+                    </button>
+                    
+                    <button 
+                      className="bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg font-bold"
+                      onClick={(e) => {e.preventDefault(); handleDirection('right');}}
+                      title="D - Right"
+                    >
+                      D
+                    </button>
+                  </div>
+                  
+                  {/* Bottom row (S) */}
+                  <div className="w-full flex justify-center">
+                    <button 
+                      className="bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg font-bold"
+                      onClick={(e) => {e.preventDefault(); handleDirection('backward');}}
+                      title="S - Backward"
+                    >
+                      S
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Height & Yaw Controls */}
+              <div className="bg-gray-700 p-3 rounded-lg">
+                <div className="text-blue-300 text-sm mb-2 text-center font-medium group relative">
+                  Height
+                  <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-80 text-white text-xs rounded p-2 -bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none w-48 z-10">
+                    <div className="flex justify-between mb-1">
+                      <span>I/8 - Up</span>
+                      <span>K/2 - Down</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>J/4 - Rotate Left</span>
+                      <span>L/6 - Rotate Right</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  {/* Top row (Up arrow) */}
+                  <div className="w-full flex justify-center">
+                    <button 
+                      className="bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg"
+                      onClick={(e) => {e.preventDefault(); handleHeightYaw('up');}}
+                      title="I/8 - Up"
+                    >
+                      <div className="w-0 h-0 border-l-[10px] border-r-[10px] border-b-[15px] border-l-transparent border-r-transparent border-b-white"></div>
+                    </button>
+                  </div>
+                  
+                  {/* Middle row (Left arrow, RESET, Right arrow) */}
+                  <div className="w-full flex justify-between items-center">
+                    <button 
+                      className="bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg"
+                      onClick={(e) => {e.preventDefault(); handleHeightYaw('rotateLeft');}}
+                      title="J/4 - Rotate Left"
+                    >
+                      <div className="w-0 h-0 border-t-[10px] border-b-[10px] border-r-[15px] border-t-transparent border-b-transparent border-r-white"></div>
+                    </button>
+                    
+                    <button 
+                      className="bg-blue-800 hover:bg-blue-700 text-white w-12 h-12 flex items-center justify-center rounded-lg text-xs"
+                      onClick={(e) => {e.preventDefault(); handleHeightYaw('reset');}}
+                      title="Reset Height/Yaw"
+                    >
+                      RESET
+                    </button>
+                    
+                    <button 
+                      className="bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg"
+                      onClick={(e) => {e.preventDefault(); handleHeightYaw('rotateRight');}}
+                      title="L/6 - Rotate Right"
+                    >
+                      <div className="w-0 h-0 border-t-[10px] border-b-[10px] border-l-[15px] border-t-transparent border-b-transparent border-l-white"></div>
+                    </button>
+                  </div>
+                  
+                  {/* Bottom row (Down arrow) */}
+                  <div className="w-full flex justify-center">
+                    <button 
+                      className="bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg"
+                      onClick={(e) => {e.preventDefault(); handleHeightYaw('down');}}
+                      title="K/2 - Down"
+                    >
+                      <div className="w-0 h-0 border-l-[10px] border-r-[10px] border-t-[15px] border-l-transparent border-r-transparent border-t-white"></div>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
