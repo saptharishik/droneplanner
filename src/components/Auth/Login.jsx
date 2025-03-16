@@ -74,10 +74,12 @@ const DroneMissionPlanner = () => {
   const handleHeightYaw = useCallback((action) => {
     switch(action) {
       case 'up':
-        setDroneData(prev => ({...prev, altitude: prev.altitude + 5}));
+        // Increase throttle by 5%, ensuring it doesn't exceed 100%
+        setDroneData(prev => ({...prev, throttlePercent: Math.min(100, prev.throttlePercent + 5)}));
         break;
       case 'down':
-        setDroneData(prev => ({...prev, altitude: prev.altitude - 5}));
+        // Decrease throttle by 5%, ensuring it doesn't go below 0%
+        setDroneData(prev => ({...prev, throttlePercent: Math.max(0, prev.throttlePercent - 5)}));
         break;
       case 'rotateLeft':
         setDroneData(prev => ({...prev, yaw: ((prev.yaw - 10) % 360 + 360) % 360}));
@@ -86,7 +88,7 @@ const DroneMissionPlanner = () => {
         setDroneData(prev => ({...prev, yaw: (prev.yaw + 10) % 360}));
         break;
       case 'reset':
-        setDroneData(prev => ({...prev, yaw: 0}));
+        setDroneData(prev => ({...prev, yaw: 0, throttlePercent: 45})); // Reset throttle to default
         break;
       default:
         break;
@@ -186,30 +188,39 @@ const DroneMissionPlanner = () => {
     }, 2000);
     
           // Simulate data updates from "backend"
-    const dataUpdateInterval = setInterval(() => {
-      if (connected && !droneData.disarmed) {
-        // Only update if connected and armed
-        setDroneData(prev => ({
-          ...prev,
-          altitude: prev.altitude + (Math.random() * 0.4 - 0.2), // Small random changes
-          velocity: Math.max(0, prev.velocity + (Math.random() * 0.6 - 0.3)),
-          xAxis: prev.xAxis + (Math.random() * 0.2 - 0.1),
-          yAxis: prev.yAxis + (Math.random() * 0.2 - 0.1),
-          // Ensure all rotation values always wrap properly
-          pitch: ((prev.pitch + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360,
-          roll: ((prev.roll + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360,
-          yaw: ((prev.yaw + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360,
-          heading: ((prev.heading + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360,
-          throttlePercent: Math.min(100, Math.max(0, prev.throttlePercent + (Math.random() * 2 - 1))),
-          opticalX: prev.opticalX + (Math.random() * 0.02 - 0.01),
-          opticalY: prev.opticalY + (Math.random() * 0.02 - 0.01)
-        }));
-        
-        // Gradually decrease battery
-        setBatteryLevel(prev => Math.max(0, prev - 0.01));
-        setBatteryVolts(prev => Math.max(14, prev - 0.001));
-      }
-    }, 500);
+    // Simulate data updates from "backend"
+const dataUpdateInterval = setInterval(() => {
+  if (connected && !droneData.disarmed) {
+    // Only update if connected and armed
+    setDroneData(prev => {
+      // Calculate altitude change based on throttle
+      // When throttle is at 50%, the drone maintains altitude
+      // When above 50%, it rises; when below 50%, it falls
+      const altitudeChangeRate = (prev.throttlePercent - 50) / 25; // Roughly -2 to +2 range
+      
+      return {
+        ...prev,
+        // Altitude now responds directly to throttle setting
+        altitude: prev.altitude + altitudeChangeRate + (Math.random() * 0.2 - 0.1),
+        velocity: Math.max(0, prev.velocity + (Math.random() * 0.6 - 0.3)),
+        xAxis: prev.xAxis + (Math.random() * 0.2 - 0.1),
+        yAxis: prev.yAxis + (Math.random() * 0.2 - 0.1),
+        // Rest remains the same
+        pitch: ((prev.pitch + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360,
+        roll: ((prev.roll + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360,
+        yaw: ((prev.yaw + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360,
+        heading: ((prev.heading + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360,
+        throttlePercent: Math.min(100, Math.max(0, prev.throttlePercent + (Math.random() * 0.5 - 0.25))), // Less random drift
+        opticalX: prev.opticalX + (Math.random() * 0.02 - 0.01),
+        opticalY: prev.opticalY + (Math.random() * 0.02 - 0.01)
+      };
+    });
+    
+    // Gradually decrease battery
+    setBatteryLevel(prev => Math.max(0, prev - 0.01));
+    setBatteryVolts(prev => Math.max(14, prev - 0.001));
+  }
+}, 500);
     
     return () => {
       clearTimeout(connectionTimer);
@@ -717,11 +728,11 @@ const DroneMissionPlanner = () => {
               {/* Height & Yaw Controls */}
               <div className="bg-gray-700 p-3 rounded-lg">
                 <div className="text-blue-300 text-sm mb-2 text-center font-medium group relative">
-                  Height
+                  Throttle
                   <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-80 text-white text-xs rounded p-2 -bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none w-48 z-10">
                     <div className="flex justify-between mb-1">
-                      <span>I/8 - Up</span>
-                      <span>K/2 - Down</span>
+                      <span>I/8 - Increase 5%</span>
+                      <span>K/2 - Decrease 5%</span>
                     </div>
                     <div className="flex justify-between">
                       <span>J/4 - Rotate Left</span>
