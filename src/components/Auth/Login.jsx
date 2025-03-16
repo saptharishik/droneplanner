@@ -21,6 +21,9 @@ const DroneMissionPlanner = () => {
   const [batteryLevel, setBatteryLevel] = useState(84);
   const [batteryVolts, setBatteryVolts] = useState(18.89);
   
+  // Camera view controls
+  const [cameraView, setCameraView] = useState('side-by-side'); // 'side-by-side', 'live', 'orientation'
+  
   // Alert system
   const [alertMessages, setAlertMessages] = useState([]);
   const [showAlertModal, setShowAlertModal] = useState(false);
@@ -205,179 +208,238 @@ const DroneMissionPlanner = () => {
         </div>
       </div>
 
-      {/* Main Content with Dual Camera Feeds */}
+      {/* Main Content with Camera Feeds */}
       <div className="flex flex-1 p-4 gap-4 overflow-hidden">
-        {/* Left Column - Camera Feeds */}
-        <div className="w-3/5 flex flex-col gap-4">
-          {/* Primary Camera Feed */}
-          <div className="h-1/2 bg-black rounded-lg relative overflow-hidden border border-gray-700">
-            <div className="absolute inset-0 flex items-center justify-center">
-              {/* Placeholder for actual camera feed from drone */}
-              <div className="text-gray-500">Live Camera Feed</div>
-              {/* Overlay HUD elements */}
-              <div className="absolute inset-0">
-                {/* Flight mode */}
-                <div className="absolute top-3 right-3 bg-black bg-opacity-60 px-3 py-1 rounded text-yellow-400">
-                  {droneData.flightMode}
-                </div>
+        {/* Camera View Controls */}
+        <div className={`${cameraView === 'side-by-side' ? 'w-3/5' : 'w-4/5'} flex flex-col gap-4`}>
+          {/* Camera View Switcher */}
+          <div className="flex justify-between items-center mb-1">
+            <h2 className="text-lg font-bold text-blue-400">Camera Feeds</h2>
+            <div className="flex gap-2">
+              <button 
+                className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'side-by-side' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                onClick={() => setCameraView('side-by-side')}
+              >
+                Live feed and orientation
+              </button>
+              <button 
+                className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'live' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                onClick={() => setCameraView('live')}
+              >
+                Live Feed
+              </button>
+              <button 
+                className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'orientation' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                onClick={() => setCameraView('orientation')}
+              >
+                Orientation 
+              </button>
+            </div>
+          </div>
+
+          {/* Camera Feeds - Adjusts based on selected view */}
+          {(cameraView === 'side-by-side' || cameraView === 'live') && (
+            <div className={`${cameraView === 'side-by-side' ? 'h-1/2' : 'h-full'} bg-black rounded-lg relative overflow-hidden border border-gray-700`}>
+              <div className="absolute inset-0 flex items-center justify-center">
+                {/* Placeholder for actual camera feed from drone */}
+                <div className="text-gray-500">Live Camera Feed</div>
                 
-                {/* Battery indicator */}
-                <div className="absolute top-3 left-3 bg-black bg-opacity-60 px-3 py-1 rounded flex items-center gap-2">
-                  <Battery 
-                    size={16} 
-                    className={
+                {/* Overlay HUD elements */}
+                <div className="absolute inset-0">
+                  {/* Camera switcher controls */}
+                  {cameraView !== 'side-by-side' && (
+                    <div className="absolute top-1/2 left-3 transform -translate-y-1/2 z-10">
+                      <button 
+                        className="bg-black bg-opacity-60 p-2 rounded-full text-white hover:bg-opacity-80"
+                        onClick={() => setCameraView('orientation')}
+                        title="Switch to Orientation View"
+                      >
+                        <Compass size={20} className="text-blue-300" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Flight mode */}
+                  <div className="absolute top-3 right-3 bg-black bg-opacity-60 px-3 py-1 rounded text-yellow-400">
+                    {droneData.flightMode}
+                  </div>
+                  
+                  {/* Battery indicator */}
+                  <div className="absolute top-3 left-3 bg-black bg-opacity-60 px-3 py-1 rounded flex items-center gap-2">
+                    <Battery 
+                      size={16} 
+                      className={
+                        batteryLevel > 50 ? "text-green-400" : 
+                        batteryLevel > 20 ? "text-yellow-400" : 
+                        "text-red-400"
+                      }
+                    />
+                    <span className={
                       batteryLevel > 50 ? "text-green-400" : 
                       batteryLevel > 20 ? "text-yellow-400" : 
                       "text-red-400"
-                    }
-                  />
-                  <span className={
-                    batteryLevel > 50 ? "text-green-400" : 
-                    batteryLevel > 20 ? "text-yellow-400" : 
-                    "text-red-400"
-                  }>
-                    {batteryLevel.toFixed(0)}%
-                  </span>
-                </div>
-                
-                {/* Center reticle */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-16 h-16 relative">
-                    <div className="w-4 h-1 bg-red-500 absolute top-1/2 left-0 transform -translate-y-1/2"></div>
-                    <div className="w-4 h-1 bg-red-500 absolute top-1/2 right-0 transform -translate-y-1/2"></div>
-                    <div className="w-1 h-4 bg-red-500 absolute top-0 left-1/2 transform -translate-x-1/2"></div>
-                    <div className="w-1 h-4 bg-red-500 absolute bottom-0 left-1/2 transform -translate-x-1/2"></div>
-                    <div className="w-3 h-3 border-2 border-red-500 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                    }>
+                      {batteryLevel.toFixed(0)}%
+                    </span>
                   </div>
-                </div>
-                
-                {/* Position */}
-                <div className="absolute bottom-3 left-3 bg-black bg-opacity-60 px-3 py-1 rounded">
-                  <div className="text-xs text-green-400">
-                    X: {droneData.xAxis.toFixed(1)} Y: {droneData.yAxis.toFixed(1)}
+                  
+                  {/* Center reticle */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-16 h-16 relative">
+                      <div className="w-4 h-1 bg-red-500 absolute top-1/2 left-0 transform -translate-y-1/2"></div>
+                      <div className="w-4 h-1 bg-red-500 absolute top-1/2 right-0 transform -translate-y-1/2"></div>
+                      <div className="w-1 h-4 bg-red-500 absolute top-0 left-1/2 transform -translate-x-1/2"></div>
+                      <div className="w-1 h-4 bg-red-500 absolute bottom-0 left-1/2 transform -translate-x-1/2"></div>
+                      <div className="w-3 h-3 border-2 border-red-500 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                    </div>
                   </div>
-                </div>
-                
-                {/* Altitude and velocity */}
-                <div className="absolute bottom-3 right-3 bg-black bg-opacity-60 px-3 py-1 rounded">
-                  <div className="text-xs text-green-400">
-                    ALT: {droneData.altitude.toFixed(1)}m SPD: {droneData.velocity.toFixed(1)}m/s
+                  
+                  {/* Position */}
+                  <div className="absolute bottom-3 left-3 bg-black bg-opacity-60 px-3 py-1 rounded">
+                    <div className="text-xs text-green-400">
+                      X: {droneData.xAxis.toFixed(1)} Y: {droneData.yAxis.toFixed(1)}
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Enhanced Orientation Visualization */}
-          <div className="h-1/2 bg-gray-800 rounded-lg relative overflow-hidden border border-gray-700">
-            {/* Sky and Ground with improved visualization */}
-            <div className="absolute inset-0" style={getRotationStyle()}>
-              {/* Gradient sky */}
-              <div className="w-full h-1/2 bg-gradient-to-b from-blue-900 to-blue-600 opacity-80"></div>
-              {/* Gradient ground with terrain texture */}
-              <div className="w-full h-1/2 bg-gradient-to-b from-green-800 to-green-900 opacity-80 absolute bottom-0"></div>
-              
-              {/* Artificial horizon with improved visibility */}
-              <div className="absolute left-0 right-0 top-1/2 h-1 bg-yellow-400"></div>
-              <div className="absolute top-0 bottom-0 left-1/2 w-1 bg-yellow-400"></div>
-              
-              {/* Improved grid lines for better orientation */}
-              <div className="grid grid-cols-12 h-full">
-                {[...Array(12)].map((_, i) => (
-                  <div key={i} className="border-r border-white border-opacity-20 h-full"></div>
-                ))}
-              </div>
-              <div className="grid grid-rows-12 w-full h-full">
-                {[...Array(12)].map((_, i) => (
-                  <div key={i} className="border-b border-white border-opacity-20 w-full"></div>
-                ))}
-              </div>
-              
-              {/* Compass markers */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full">
-                <div className="absolute top-10 left-1/2 transform -translate-x-1/2 text-yellow-400 text-lg font-bold">N</div>
-                <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-yellow-400 text-lg font-bold">S</div>
-                <div className="absolute left-10 top-1/2 transform -translate-y-1/2 text-yellow-400 text-lg font-bold">W</div>
-                <div className="absolute right-10 top-1/2 transform -translate-y-1/2 text-yellow-400 text-lg font-bold">E</div>
-              </div>
-              
-              {/* Additional perspective lines */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                <div className="relative h-96 w-96">
-                  <div className="absolute border-2 border-dashed border-white border-opacity-20 h-full w-full"></div>
-                  <div className="absolute border-2 border-dashed border-white border-opacity-20 h-3/4 w-3/4 top-1/8 left-1/8"></div>
-                  <div className="absolute border-2 border-dashed border-white border-opacity-20 h-1/2 w-1/2 top-1/4 left-1/4"></div>
-                  <div className="absolute border-2 border-dashed border-white border-opacity-20 h-1/4 w-1/4 top-3/8 left-3/8"></div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Enhanced HUD Elements - Fixed overlay */}
-            <div className="absolute inset-0 p-4">
-              {/* Top Bar - Compass */}
-              <div className="w-full flex justify-center">
-                <div className="bg-black bg-opacity-60 px-4 py-1 rounded-lg flex items-center gap-2">
-                  <div className="text-blue-300 text-sm">
-                    Heading: <span className="font-bold text-blue-300">{droneData.yaw}°</span>
-                  </div>
-                  <Compass size={16} className="text-blue-300" />
-                </div>
-              </div>
-
-              {/* Center - Enhanced Reticle */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="relative w-64 h-64">
-                  {/* Center reticle with improved design */}
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                    <div className="w-24 h-24 relative">
-                      <div className="w-6 h-1 bg-yellow-400 absolute top-1/2 left-0 transform -translate-y-1/2"></div>
-                      <div className="w-6 h-1 bg-yellow-400 absolute top-1/2 right-0 transform -translate-y-1/2"></div>
-                      <div className="w-1 h-6 bg-yellow-400 absolute top-0 left-1/2 transform -translate-x-1/2"></div>
-                      <div className="w-1 h-6 bg-yellow-400 absolute bottom-0 left-1/2 transform -translate-x-1/2"></div>
-                      <div className="w-4 h-4 border-2 border-yellow-400 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
-                      <div className="w-6 h-6 border border-yellow-400 border-dashed rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                  
+                  {/* Altitude and velocity */}
+                  <div className="absolute bottom-3 right-3 bg-black bg-opacity-60 px-3 py-1 rounded">
+                    <div className="text-xs text-green-400">
+                      ALT: {droneData.altitude.toFixed(1)}m SPD: {droneData.velocity.toFixed(1)}m/s
                     </div>
                   </div>
                 </div>
               </div>
-
-              {/* Improved attitude indicators */}
-              <div className="absolute bottom-3 left-3 bg-black bg-opacity-60 px-3 py-2 rounded-lg flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-20">Roll:</div>
-                  <div className="text-green-400">{droneData.roll.toFixed(1)}°</div>
+            </div>
+          )}
+          
+          {/* Enhanced Orientation Visualization */}
+          {(cameraView === 'side-by-side' || cameraView === 'orientation') && (
+            <div className={`${cameraView === 'side-by-side' ? 'h-1/2' : 'h-full'} bg-gray-800 rounded-lg relative overflow-hidden border border-gray-700`}>
+              {/* Sky and Ground with improved visualization */}
+              <div className="absolute inset-0" style={getRotationStyle()}>
+                {/* Gradient sky */}
+                <div className="w-full h-1/2 bg-gradient-to-b from-blue-900 to-blue-600 opacity-80"></div>
+                {/* Gradient ground with terrain texture */}
+                <div className="w-full h-1/2 bg-gradient-to-b from-green-800 to-green-900 opacity-80 absolute bottom-0"></div>
+                
+                {/* Artificial horizon with improved visibility */}
+                <div className="absolute left-0 right-0 top-1/2 h-1 bg-yellow-400"></div>
+                <div className="absolute top-0 bottom-0 left-1/2 w-1 bg-yellow-400"></div>
+                
+                {/* Improved grid lines for better orientation */}
+                <div className="grid grid-cols-12 h-full">
+                  {[...Array(12)].map((_, i) => (
+                    <div key={i} className="border-r border-white border-opacity-20 h-full"></div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-20">Pitch:</div>
-                  <div className="text-green-400">{droneData.pitch.toFixed(1)}°</div>
+                <div className="grid grid-rows-12 w-full h-full">
+                  {[...Array(12)].map((_, i) => (
+                    <div key={i} className="border-b border-white border-opacity-20 w-full"></div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-20">Yaw:</div>
-                  <div className="text-green-400">{droneData.yaw.toFixed(1)}°</div>
+                
+                {/* Compass markers */}
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full">
+                  <div className="absolute top-10 left-1/2 transform -translate-x-1/2 text-yellow-400 text-lg font-bold">N</div>
+                  <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-yellow-400 text-lg font-bold">S</div>
+                  <div className="absolute left-10 top-1/2 transform -translate-y-1/2 text-yellow-400 text-lg font-bold">W</div>
+                  <div className="absolute right-10 top-1/2 transform -translate-y-1/2 text-yellow-400 text-lg font-bold">E</div>
+                </div>
+                
+                {/* Additional perspective lines */}
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <div className="relative h-96 w-96">
+                    <div className="absolute border-2 border-dashed border-white border-opacity-20 h-full w-full"></div>
+                    <div className="absolute border-2 border-dashed border-white border-opacity-20 h-3/4 w-3/4 top-1/8 left-1/8"></div>
+                    <div className="absolute border-2 border-dashed border-white border-opacity-20 h-1/2 w-1/2 top-1/4 left-1/4"></div>
+                    <div className="absolute border-2 border-dashed border-white border-opacity-20 h-1/4 w-1/4 top-3/8 left-3/8"></div>
+                  </div>
                 </div>
               </div>
               
-              {/* Throttle indicator */}
-              <div className="absolute bottom-3 right-3 bg-black bg-opacity-60 px-3 py-2 rounded-lg">
-                <div className="text-xs mb-1">Throttle</div>
-                <div className="w-24 h-3 bg-gray-700 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full ${
-                      droneData.throttlePercent > 80 ? 'bg-red-500' :
-                      droneData.throttlePercent > 50 ? 'bg-yellow-500' :
-                      'bg-green-500'
-                    }`}
-                    style={{ width: `${droneData.throttlePercent}%` }}
-                  ></div>
+              {/* Enhanced HUD Elements - Fixed overlay */}
+              <div className="absolute inset-0 p-4">
+                {/* Camera switcher controls */}
+                {cameraView !== 'side-by-side' && (
+                  <div className="absolute top-1/2 left-3 transform -translate-y-1/2 z-10">
+                    <button 
+                      className="bg-black bg-opacity-60 p-2 rounded-full text-white hover:bg-opacity-80"
+                      onClick={() => setCameraView('live')}
+                      title="Switch to Live Camera"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-300" width="20" height="20">
+                        <path d="M23 7l-7 5 7 5V7z"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              
+                {/* Top Bar - Compass */}
+                <div className="w-full flex justify-center">
+                  <div className="bg-black bg-opacity-60 px-4 py-1 rounded-lg flex items-center gap-2">
+                    <div className="text-blue-300 text-sm">
+                      Heading: <span className="font-bold text-blue-300">{droneData.yaw}°</span>
+                    </div>
+                    <Compass size={16} className="text-blue-300" />
+                  </div>
                 </div>
-                <div className="text-xs mt-1 text-center">{droneData.throttlePercent.toFixed(0)}%</div>
+
+                {/* Center - Enhanced Reticle */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="relative w-64 h-64">
+                    {/* Center reticle with improved design */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                      <div className="w-24 h-24 relative">
+                        <div className="w-6 h-1 bg-yellow-400 absolute top-1/2 left-0 transform -translate-y-1/2"></div>
+                        <div className="w-6 h-1 bg-yellow-400 absolute top-1/2 right-0 transform -translate-y-1/2"></div>
+                        <div className="w-1 h-6 bg-yellow-400 absolute top-0 left-1/2 transform -translate-x-1/2"></div>
+                        <div className="w-1 h-6 bg-yellow-400 absolute bottom-0 left-1/2 transform -translate-x-1/2"></div>
+                        <div className="w-4 h-4 border-2 border-yellow-400 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                        <div className="w-6 h-6 border border-yellow-400 border-dashed rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Improved attitude indicators */}
+                <div className="absolute bottom-3 left-3 bg-black bg-opacity-60 px-3 py-2 rounded-lg flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-20">Roll:</div>
+                    <div className="text-green-400">{droneData.roll.toFixed(1)}°</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-20">Pitch:</div>
+                    <div className="text-green-400">{droneData.pitch.toFixed(1)}°</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-20">Yaw:</div>
+                    <div className="text-green-400">{droneData.yaw.toFixed(1)}°</div>
+                  </div>
+                </div>
+                
+                {/* Throttle indicator */}
+                <div className="absolute bottom-3 right-3 bg-black bg-opacity-60 px-3 py-2 rounded-lg">
+                  <div className="text-xs mb-1">Throttle</div>
+                  <div className="w-24 h-3 bg-gray-700 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full ${
+                        droneData.throttlePercent > 80 ? 'bg-red-500' :
+                        droneData.throttlePercent > 50 ? 'bg-yellow-500' :
+                        'bg-green-500'
+                      }`}
+                      style={{ width: `${droneData.throttlePercent}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-xs mt-1 text-center">{droneData.throttlePercent.toFixed(0)}%</div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
         
-        {/* Right Column - Enhanced Data and Controls */}
-        <div className="w-2/5 flex flex-col gap-4 overflow-auto">
+        {/* Right Column - Enhanced Data and Controls - dynamically adjust width */}
+        <div className={`${cameraView === 'side-by-side' ? 'w-2/5' : 'w-1/5'} flex flex-col gap-4 overflow-auto`}>
           {/* Status Panel */}
           <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
             <h2 className="text-lg font-bold text-blue-400 mb-2">Drone Status</h2>
@@ -386,32 +448,19 @@ const DroneMissionPlanner = () => {
             <div className="grid grid-cols-2 gap-3">
               {/* Arm/Disarm Control */}
               <div className="col-span-2">
-                <button 
-                  className={`
-                    w-full py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2
-                    ${droneData.disarmed 
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-red-600 hover:bg-red-700 text-white'}
-                  `}
-                  onClick={toggleArm}
-                >
-                  <div className={`w-3 h-3 rounded-full ${droneData.disarmed ? 'bg-white' : 'bg-white animate-pulse'}`}></div>
-                  {droneData.disarmed ? 'ARM DRONE' : 'DISARM DRONE'}
-                </button>
+                <ArmDisarmButton 
+                  isDisarmed={droneData.disarmed} 
+                  onToggle={toggleArm} 
+                />
               </div>
               
               {/* Flight Mode Selection with improved styling */}
               <div className="col-span-2">
-                <div className="text-blue-300 text-sm mb-1">Flight Mode</div>
-                <select 
-                  className="bg-gray-700 border border-gray-600 text-white w-full py-2 px-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={droneData.flightMode}
-                  onChange={(e) => changeFlightMode(e.target.value)}
-                >
-                  {flightModes.map(mode => (
-                    <option key={mode} value={mode}>{mode}</option>
-                  ))}
-                </select>
+                <FlightModeSelector 
+                  currentMode={droneData.flightMode}
+                  modes={flightModes}
+                  onChange={changeFlightMode}
+                />
               </div>
             </div>
           </div>
@@ -600,6 +649,42 @@ const DroneMissionPlanner = () => {
         </div>
       )}
     </div>
+  );
+};
+
+// Flight Mode Selector Component
+const FlightModeSelector = ({ currentMode, modes, onChange }) => {
+  return (
+    <div>
+      <div className="text-blue-300 text-sm mb-1">Flight Mode</div>
+      <select 
+        className="bg-gray-700 border border-gray-600 text-white w-full py-2 px-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        value={currentMode}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {modes.map(mode => (
+          <option key={mode} value={mode}>{mode}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
+// Arm/Disarm Button Component
+const ArmDisarmButton = ({ isDisarmed, onToggle }) => {
+  return (
+    <button 
+      className={`
+        w-full py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2
+        ${isDisarmed 
+          ? 'bg-green-600 hover:bg-green-700 text-white' 
+          : 'bg-red-600 hover:bg-red-700 text-white'}
+      `}
+      onClick={onToggle}
+    >
+      <div className={`w-3 h-3 rounded-full ${isDisarmed ? 'bg-white' : 'bg-white animate-pulse'}`}></div>
+      {isDisarmed ? 'ARM DRONE' : 'DISARM DRONE'}
+    </button>
   );
 };
 
