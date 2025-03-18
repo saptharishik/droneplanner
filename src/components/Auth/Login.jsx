@@ -11,23 +11,25 @@ import {
   BarChart3,
   Wind
 } from 'lucide-react';
+import { ref, onValue, update, push, set, get } from 'firebase/database';
+import { database } from '../../config/firebase';
 
 const DroneMissionPlanner = () => {
-  // Connection state
-  const [connected, setConnected] = useState(false);
+  // Firebase references for each state
+  const connectedRef = ref(database, 'droneMissionPlanner/connected');
+  const batteryLevelRef = ref(database, 'droneMissionPlanner/batteryLevel');
+  const batteryVoltsRef = ref(database, 'droneMissionPlanner/batteryVolts');
+  const cameraViewRef = ref(database, 'droneMissionPlanner/cameraView');
+  const alertMessagesRef = ref(database, 'droneMissionPlanner/alertMessages');
+  const droneDataRef = ref(database, 'droneMissionPlanner/droneData');
   
-  // Battery data
+  // Local state (will be synced with Firebase)
+  const [connected, setConnected] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState(84);
   const [batteryVolts, setBatteryVolts] = useState(18.89);
-  
-  // Camera view controls
   const [cameraView, setCameraView] = useState('side-by-side'); // 'side-by-side', 'live', 'orientation'
-  
-  // Alert system
   const [alertMessages, setAlertMessages] = useState([]);
   const [showAlertModal, setShowAlertModal] = useState(false);
-  
-  // Drone telemetry data
   const [droneData, setDroneData] = useState({
     xAxis: 24.8,
     yAxis: 14.6,
@@ -47,53 +49,219 @@ const DroneMissionPlanner = () => {
 
   const flightModes = ['Land', 'Stabilize', 'AltHold', 'FlowHold', 'Loiter', 'RTL', 'Auto'];
 
+  // Initialize Firebase data on component mount or if data doesn't exist
+  useEffect(() => {
+    const initializeFirebaseData = async () => {
+      try {
+        // Get current data from Firebase
+        const connectedSnapshot = await get(connectedRef);
+        const batteryLevelSnapshot = await get(batteryLevelRef);
+        const batteryVoltsSnapshot = await get(batteryVoltsRef);
+        const cameraViewSnapshot = await get(cameraViewRef);
+        const alertMessagesSnapshot = await get(alertMessagesRef);
+        const droneDataSnapshot = await get(droneDataRef);
+
+        // If data doesn't exist in Firebase, initialize it with local state
+        if (!connectedSnapshot.exists()) {
+          await set(connectedRef, false);
+        }
+        if (!batteryLevelSnapshot.exists()) {
+          await set(batteryLevelRef, 84);
+        }
+        if (!batteryVoltsSnapshot.exists()) {
+          await set(batteryVoltsRef, 18.89);
+        }
+        if (!cameraViewSnapshot.exists()) {
+          await set(cameraViewRef, 'side-by-side');
+        }
+        if (!alertMessagesSnapshot.exists()) {
+          await set(alertMessagesRef, []);
+        }
+        if (!droneDataSnapshot.exists()) {
+          await set(droneDataRef, {
+            xAxis: 24.8,
+            yAxis: 14.6,
+            velocity: 20.4,
+            altitude: 197,
+            disarmed: true,
+            pitch: 10,
+            yaw: 330,
+            roll: 0,
+            flightMode: 'Stabilize',
+            throttlePercent: 45,
+            heading: 330,
+            homeDistance: 125,
+            opticalX: 0.02,
+            opticalY: -0.03
+          });
+        }
+      } catch (error) {
+        console.error("Error initializing Firebase data:", error);
+        // Add an alert for Firebase initialization error
+        updateAlertMessages({
+          id: Date.now(),
+          type: 'error',
+          message: 'Failed to initialize Firebase: ' + error.message,
+          timestamp: new Date()
+        });
+      }
+    };
+
+    initializeFirebaseData();
+  }, []);
+
+  // Set up Firebase listeners for each state
+  useEffect(() => {
+    const connectedListener = onValue(connectedRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data !== null) {
+        setConnected(data);
+      }
+    });
+
+    const batteryLevelListener = onValue(batteryLevelRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data !== null) {
+        setBatteryLevel(data);
+      }
+    });
+
+    const batteryVoltsListener = onValue(batteryVoltsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data !== null) {
+        setBatteryVolts(data);
+      }
+    });
+
+    const cameraViewListener = onValue(cameraViewRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data !== null) {
+        setCameraView(data);
+      }
+    });
+
+    const alertMessagesListener = onValue(alertMessagesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data !== null) {
+        setAlertMessages(Array.isArray(data) ? data : Object.values(data));
+      }
+    });
+
+    const droneDataListener = onValue(droneDataRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data !== null) {
+        setDroneData(data);
+      }
+    });
+
+    // Cleanup listeners on component unmount
+    return () => {
+      connectedListener();
+      batteryLevelListener();
+      batteryVoltsListener();
+      cameraViewListener();
+      alertMessagesListener();
+      droneDataListener();
+    };
+  }, []);
+
+  // Function to update Firebase when local state changes
+  const updateFirebaseConnected = (value) => {
+    set(connectedRef, value);
+  };
+
+  const updateFirebaseBatteryLevel = (value) => {
+    set(batteryLevelRef, value);
+  };
+
+  const updateFirebaseBatteryVolts = (value) => {
+    set(batteryVoltsRef, value);
+  };
+
+  const updateFirebaseCameraView = (value) => {
+    set(cameraViewRef, value);
+  };
+
+  const updateFirebaseDroneData = (data) => {
+    update(droneDataRef, data);
+  };
+
+  const updateAlertMessages = (newAlert) => {
+    // Create a new array with the new alert
+    const updatedAlerts = [...alertMessages, newAlert];
+    
+    // Update local state
+    setAlertMessages(updatedAlerts);
+    
+    // Update Firebase
+    set(alertMessagesRef, updatedAlerts);
+  };
+
   // Direction control handler
   const handleDirection = useCallback((direction) => {
+    let updatedData = { ...droneData };
+    
     switch(direction) {
       case 'forward':
-        setDroneData(prev => ({...prev, pitch: ((prev.pitch - 5) % 360 + 360) % 360}));
+        updatedData.pitch = ((updatedData.pitch - 5) % 360 + 360) % 360;
         break;
       case 'backward':
-        setDroneData(prev => ({...prev, pitch: ((prev.pitch + 5) % 360 + 360) % 360}));
+        updatedData.pitch = ((updatedData.pitch + 5) % 360 + 360) % 360;
         break;
       case 'left':
-        setDroneData(prev => ({...prev, roll: ((prev.roll - 5) % 360 + 360) % 360}));
+        updatedData.roll = ((updatedData.roll - 5) % 360 + 360) % 360;
         break;
       case 'right':
-        setDroneData(prev => ({...prev, roll: ((prev.roll + 5) % 360 + 360) % 360}));
+        updatedData.roll = ((updatedData.roll + 5) % 360 + 360) % 360;
         break;
       case 'reset':
-        setDroneData(prev => ({...prev, pitch: 0, roll: 0}));
+        updatedData.pitch = 0;
+        updatedData.roll = 0;
         break;
       default:
         break;
     }
-  }, []);
+    
+    // Update local state (will be overwritten by Firebase listener)
+    setDroneData(updatedData);
+    
+    // Update Firebase
+    updateFirebaseDroneData(updatedData);
+  }, [droneData]);
 
   // Height and yaw control handler
   const handleHeightYaw = useCallback((action) => {
+    let updatedData = { ...droneData };
+    
     switch(action) {
       case 'up':
         // Increase throttle by 5%, ensuring it doesn't exceed 100%
-        setDroneData(prev => ({...prev, throttlePercent: Math.min(100, prev.throttlePercent + 5)}));
+        updatedData.throttlePercent = Math.min(100, updatedData.throttlePercent + 5);
         break;
       case 'down':
         // Decrease throttle by 5%, ensuring it doesn't go below 0%
-        setDroneData(prev => ({...prev, throttlePercent: Math.max(0, prev.throttlePercent - 5)}));
+        updatedData.throttlePercent = Math.max(0, updatedData.throttlePercent - 5);
         break;
       case 'rotateLeft':
-        setDroneData(prev => ({...prev, yaw: ((prev.yaw - 10) % 360 + 360) % 360}));
+        updatedData.yaw = ((updatedData.yaw - 10) % 360 + 360) % 360;
         break;
       case 'rotateRight':
-        setDroneData(prev => ({...prev, yaw: (prev.yaw + 10) % 360}));
+        updatedData.yaw = (updatedData.yaw + 10) % 360;
         break;
       case 'reset':
-        setDroneData(prev => ({...prev, yaw: 0, throttlePercent:0})); // Reset throttle to default
+        updatedData.yaw = 0;
+        updatedData.throttlePercent = 0; // Reset throttle to default
         break;
       default:
         break;
     }
-  }, []);
+    
+    // Update local state (will be overwritten by Firebase listener)
+    setDroneData(updatedData);
+    
+    // Update Firebase
+    updateFirebaseDroneData(updatedData);
+  }, [droneData]);
 
   // Global reset handler
   const handleGlobalReset = useCallback(() => {
@@ -166,81 +334,90 @@ const DroneMissionPlanner = () => {
   useEffect(() => {
     // Simulate connection
     const connectionTimer = setTimeout(() => {
+      // Update local state
       setConnected(true);
       
+      // Update Firebase
+      updateFirebaseConnected(true);
+      
       // Add initial alert
-      setAlertMessages([
-        { id: 1, type: 'info', message: 'Drone connected successfully', timestamp: new Date() }
-      ]);
+      updateAlertMessages({
+        id: 1,
+        type: 'info',
+        message: 'Drone connected successfully',
+        timestamp: new Date()
+      });
       
       // Check battery level and add warning if low
       if (batteryLevel < 30) {
-        setAlertMessages(prev => [
-          ...prev,
-          { 
-            id: 2, 
-            type: 'warning', 
-            message: `Low battery warning: ${batteryLevel}%`, 
-            timestamp: new Date() 
-          }
-        ]);
+        updateAlertMessages({
+          id: 2,
+          type: 'warning',
+          message: `Low battery warning: ${batteryLevel}%`,
+          timestamp: new Date()
+        });
       }
     }, 2000);
     
-          // Simulate data updates from "backend"
     // Simulate data updates from "backend"
-const dataUpdateInterval = setInterval(() => {
-  if (connected && !droneData.disarmed) {
-    // Only update if connected and armed
-    setDroneData(prev => {
-      // Calculate altitude change based on throttle
-      // When throttle is at 50%, the drone maintains altitude
-      // When above 50%, it rises; when below 50%, it falls
-      const altitudeChangeRate = (prev.throttlePercent - 50) / 25; // Roughly -2 to +2 range
-      
-      return {
-        ...prev,
-        // Altitude now responds directly to throttle setting
-        altitude: prev.altitude + altitudeChangeRate + (Math.random() * 0.2 - 0.1),
-        velocity: Math.max(0, prev.velocity + (Math.random() * 0.6 - 0.3)),
-        xAxis: prev.xAxis + (Math.random() * 0.2 - 0.1),
-        yAxis: prev.yAxis + (Math.random() * 0.2 - 0.1),
-        // Rest remains the same
-        pitch: ((prev.pitch + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360,
-        roll: ((prev.roll + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360,
-        yaw: ((prev.yaw + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360,
-        heading: ((prev.heading + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360,
-        throttlePercent: Math.min(100, Math.max(0, prev.throttlePercent + (Math.random() * 0.5 - 0.25))), // Less random drift
-        opticalX: prev.opticalX + (Math.random() * 0.02 - 0.01),
-        opticalY: prev.opticalY + (Math.random() * 0.02 - 0.01)
-      };
-    });
-    
-    // Gradually decrease battery
-    setBatteryLevel(prev => Math.max(0, prev - 0.01));
-    setBatteryVolts(prev => Math.max(14, prev - 0.001));
-  }
-}, 500);
+    const dataUpdateInterval = setInterval(() => {
+      if (connected && !droneData.disarmed) {
+        // Only update if connected and armed
+        const updatedDroneData = { ...droneData };
+        
+        // Calculate altitude change based on throttle
+        // When throttle is at 50%, the drone maintains altitude
+        // When above 50%, it rises; when below 50%, it falls
+        const altitudeChangeRate = (updatedDroneData.throttlePercent - 50) / 25; // Roughly -2 to +2 range
+        
+        updatedDroneData.altitude = updatedDroneData.altitude + altitudeChangeRate + (Math.random() * 0.2 - 0.1);
+        updatedDroneData.velocity = Math.max(0, updatedDroneData.velocity + (Math.random() * 0.6 - 0.3));
+        updatedDroneData.xAxis = updatedDroneData.xAxis + (Math.random() * 0.2 - 0.1);
+        updatedDroneData.yAxis = updatedDroneData.yAxis + (Math.random() * 0.2 - 0.1);
+        updatedDroneData.pitch = ((updatedDroneData.pitch + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360;
+        updatedDroneData.roll = ((updatedDroneData.roll + (Math.random() * 0.1 - 0.05)) % 360 + 360) % 360;
+        updatedDroneData.yaw = ((updatedDroneData.yaw + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360;
+        updatedDroneData.heading = ((updatedDroneData.heading + (Math.random() * 0.2 - 0.1)) % 360 + 360) % 360;
+        updatedDroneData.throttlePercent = Math.min(100, Math.max(0, updatedDroneData.throttlePercent + (Math.random() * 0.5 - 0.25))); // Less random drift
+        updatedDroneData.opticalX = updatedDroneData.opticalX + (Math.random() * 0.02 - 0.01);
+        updatedDroneData.opticalY = updatedDroneData.opticalY + (Math.random() * 0.02 - 0.01);
+        
+        // Update local state (will be overwritten by Firebase listener)
+        setDroneData(updatedDroneData);
+        
+        // Update Firebase
+        updateFirebaseDroneData(updatedDroneData);
+        
+        // Gradually decrease battery
+        const newBatteryLevel = Math.max(0, batteryLevel - 0.01);
+        const newBatteryVolts = Math.max(14, batteryVolts - 0.001);
+        
+        // Update local state (will be overwritten by Firebase listener)
+        setBatteryLevel(newBatteryLevel);
+        setBatteryVolts(newBatteryVolts);
+        
+        // Update Firebase
+        updateFirebaseBatteryLevel(newBatteryLevel);
+        updateFirebaseBatteryVolts(newBatteryVolts);
+      }
+    }, 500);
     
     return () => {
       clearTimeout(connectionTimer);
       clearInterval(dataUpdateInterval);
     };
-  }, [connected, droneData.disarmed, batteryLevel]);
+  }, [connected, droneData, batteryLevel, batteryVolts]);
 
   // Check for low battery and add warning
   useEffect(() => {
     if (batteryLevel < 30 && batteryLevel > 29.9) {
       // Only add the warning once when dropping below 30%
-      setAlertMessages(prev => [
-        ...prev,
-        { 
-          id: Date.now(), 
-          type: 'warning', 
-          message: `Low battery warning: ${batteryLevel.toFixed(0)}%`, 
-          timestamp: new Date() 
-        }
-      ]);
+      updateAlertMessages({
+        id: Date.now(),
+        type: 'warning',
+        message: `Low battery warning: ${batteryLevel.toFixed(0)}%`,
+        timestamp: new Date()
+      });
     }
   }, [batteryLevel]);
 
@@ -259,33 +436,39 @@ const dataUpdateInterval = setInterval(() => {
   
   // Controls
   const toggleArm = () => {
-    setDroneData({...droneData, disarmed: !droneData.disarmed});
+    const updatedDroneData = { ...droneData, disarmed: !droneData.disarmed };
+    
+    // Update local state (will be overwritten by Firebase listener)
+    setDroneData(updatedDroneData);
+    
+    // Update Firebase
+    updateFirebaseDroneData(updatedDroneData);
     
     // Add alert message
-    setAlertMessages(prev => [
-      ...prev,
-      { 
-        id: Date.now(), 
-        type: 'info', 
-        message: droneData.disarmed ? 'Drone armed' : 'Drone disarmed', 
-        timestamp: new Date() 
-      }
-    ]);
+    updateAlertMessages({
+      id: Date.now(),
+      type: 'info',
+      message: updatedDroneData.disarmed ? 'Drone disarmed' : 'Drone armed',
+      timestamp: new Date()
+    });
   };
   
   const changeFlightMode = (mode) => {
-    setDroneData({...droneData, flightMode: mode});
+    const updatedDroneData = { ...droneData, flightMode: mode };
+    
+    // Update local state (will be overwritten by Firebase listener)
+    setDroneData(updatedDroneData);
+    
+    // Update Firebase
+    updateFirebaseDroneData(updatedDroneData);
     
     // Add alert message
-    setAlertMessages(prev => [
-      ...prev,
-      { 
-        id: Date.now(), 
-        type: 'info', 
-        message: `Flight mode changed to ${mode}`, 
-        timestamp: new Date() 
-      }
-    ]);
+    updateAlertMessages({
+      id: Date.now(),
+      type: 'info',
+      message: `Flight mode changed to ${mode}`,
+      timestamp: new Date()
+    });
   };
   
   // Get alert count for badge
@@ -354,19 +537,28 @@ const dataUpdateInterval = setInterval(() => {
             <div className="flex gap-2">
               <button 
                 className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'side-by-side' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                onClick={() => setCameraView('side-by-side')}
+                onClick={() => {
+                  setCameraView('side-by-side');
+                  updateFirebaseCameraView('side-by-side');
+                }}
               >
                 Side by Side
               </button>
               <button 
                 className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'live' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                onClick={() => setCameraView('live')}
+                onClick={() => {
+                  setCameraView('live');
+                  updateFirebaseCameraView('live');
+                }}
               >
                 Live Feed Only
               </button>
               <button 
                 className={`px-3 py-1 rounded-lg text-sm font-medium ${cameraView === 'orientation' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                onClick={() => setCameraView('orientation')}
+                onClick={() => {
+                  setCameraView('orientation');
+                  updateFirebaseCameraView('orientation');
+                }}
               >
                 Orientation Only
               </button>
@@ -387,7 +579,10 @@ const dataUpdateInterval = setInterval(() => {
                     <div className="absolute top-1/2 left-3 transform -translate-y-1/2 z-10">
                       <button 
                         className="bg-black bg-opacity-60 p-2 rounded-full text-white hover:bg-opacity-80"
-                        onClick={() => setCameraView('orientation')}
+                        onClick={() => {
+                          setCameraView('orientation');
+                          updateFirebaseCameraView('orientation');
+                        }}
                         title="Switch to Orientation View"
                       >
                         <Compass size={20} className="text-blue-300" />
@@ -500,7 +695,10 @@ const dataUpdateInterval = setInterval(() => {
                   <div className="absolute top-1/2 left-3 transform -translate-y-1/2 z-10">
                     <button 
                       className="bg-black bg-opacity-60 p-2 rounded-full text-white hover:bg-opacity-80"
-                      onClick={() => setCameraView('live')}
+                      onClick={() => {
+                        setCameraView('live');
+                        updateFirebaseCameraView('live');
+                      }}
                       title="Switch to Live Camera"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-300" width="20" height="20">
@@ -843,7 +1041,7 @@ const dataUpdateInterval = setInterval(() => {
                           {alert.message}
                         </div>
                         <div className="text-xs text-gray-400">
-                          {alert.timestamp.toLocaleTimeString()}
+                          {alert.timestamp && new Date(alert.timestamp).toLocaleTimeString()}
                         </div>
                       </div>
                     </div>
