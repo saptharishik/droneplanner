@@ -222,11 +222,11 @@ const DroneMissionPlanner = () => {
         break;
     }
     
-    // Update local state (will be overwritten by Firebase listener)
+    // Update local state immediately for responsive UI
     setDroneData(updatedData);
     
-    // Update Firebase
-    updateFirebaseDroneData(updatedData);
+    // Update Firebase with set instead of update for more reliable synchronization
+    set(droneDataRef, updatedData);
   }, [droneData]);
 
   // Height and yaw control handler
@@ -256,18 +256,38 @@ const DroneMissionPlanner = () => {
         break;
     }
     
-    // Update local state (will be overwritten by Firebase listener)
+    // Update local state immediately for responsive UI
     setDroneData(updatedData);
     
-    // Update Firebase
-    updateFirebaseDroneData(updatedData);
+    // Use set instead of update for more reliable synchronization
+    set(droneDataRef, updatedData);
   }, [droneData]);
 
-  // Global reset handler
+  // Global reset handler - directly update all values at once for more reliable reset
   const handleGlobalReset = useCallback(() => {
-    handleDirection('reset');
-    handleHeightYaw('reset');
-  }, [handleDirection, handleHeightYaw]);
+    // Create a reset data object with all values that should be reset
+    const resetData = {
+      ...droneData,
+      pitch: 0,
+      roll: 0,
+      yaw: 0,
+      throttlePercent: 0
+    };
+    
+    // Update local state first for immediate feedback
+    setDroneData(resetData);
+    
+    // Then update Firebase - using set instead of update to ensure complete replacement
+    set(droneDataRef, resetData);
+    
+    // Add alert message
+    updateAlertMessages({
+      id: Date.now(),
+      type: 'info',
+      message: 'Controls reset to default position',
+      timestamp: new Date()
+    });
+  }, [droneData]);
 
   // Keyboard control listener
   useEffect(() => {
@@ -314,8 +334,9 @@ const DroneMissionPlanner = () => {
           handleHeightYaw('rotateRight');
           break;
         
-        // Space for global reset
+        // Space for global reset - Handle more directly for reliability
         case ' ':
+          console.log('Space key pressed - executing global reset');
           handleGlobalReset();
           break;
         
