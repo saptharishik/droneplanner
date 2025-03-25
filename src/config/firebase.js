@@ -4,15 +4,15 @@ import { getDatabase } from 'firebase/database';
 
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAewLZcyumD_aT-Mu0DhSoCB6oxUDd_l7s",
-    authDomain: "drone-258a6.firebaseapp.com",
-    databaseURL: "https://drone-258a6-default-rtdb.firebaseio.com",
-    projectId: "drone-258a6",
-    storageBucket: "drone-258a6.firebasestorage.app",
-    messagingSenderId: "176910514480",
-    appId: "1:176910514480:web:d09d808c1cde87f147b0f5",
-    measurementId: "G-QL6QQVY5CJ"
-  };
+  apiKey: "AIzaSyAxGNDFSoay_JH_dywqJiltQ7u21gBGg2o",
+  authDomain: "iroc25.firebaseapp.com",
+  databaseURL: "https://iroc25-default-rtdb.firebaseio.com",
+  projectId: "iroc25",
+  storageBucket: "iroc25.firebasestorage.app",
+  messagingSenderId: "1059139853073",
+  appId: "1:1059139853073:web:85b3ecc145bda92a14cab0",
+  measurementId: "G-NPYPY6BQM5"
+};
   
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
