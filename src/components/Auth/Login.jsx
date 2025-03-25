@@ -1,4 +1,3 @@
-// Get alert count for badge
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
 Battery, 
@@ -50,9 +49,7 @@ const [droneData, setDroneData] = useState({
 });
 
 const flightModes = ['Land', 'Stabilize', 'AltHold', 'FlowHold', 'Loiter', 'RTL', 'Auto'];
-const getActiveAlertCount = () => {
-  return alertMessages.length;
-};
+
 // Initialize Firebase data on component mount
 useEffect(() => {
   const initializeFirebaseData = async () => {
@@ -151,7 +148,9 @@ useEffect(() => {
       homeDistance: data.homeDistance !== undefined ? data.homeDistance : prevData.homeDistance,
       opticalX: data.opticalX !== undefined ? data.opticalX : prevData.opticalX,
       opticalY: data.opticalY !== undefined ? data.opticalY : prevData.opticalY,
-      altitude: data.altitude !== undefined ? data.altitude : prevData.altitude
+      altitude: data.altitude !== undefined ? data.altitude : prevData.altitude,
+      flightMode: data.flightMode || prevData.flightMode, // Read flightMode from droneData instead of controls
+      disarmed: data.disarmed !== undefined ? data.disarmed : prevData.disarmed
     }));
   });
   
@@ -162,6 +161,7 @@ useEffect(() => {
       setCameraView(data);
     }
   });
+ 
   
   // Listen for alert messages
   const alertMessagesListener = onValue(alertMessagesRef, (snapshot) => {
@@ -180,8 +180,8 @@ useEffect(() => {
     // This helps synchronize the UI with control values set by other clients
     setDroneData(prevData => ({
       ...prevData,
-      disarmed: controlData.disarm !== undefined ? controlData.disarm : prevData.disarmed,
-      flightMode: controlData.flightMode || prevData.flightMode
+      disarmed: controlData.disarm !== undefined ? controlData.disarm : prevData.disarmed
+      // Removed flightMode from here since we now read it from droneData
     }));
     
     // Update drone mode (auto/manual)
@@ -201,12 +201,11 @@ useEffect(() => {
 
 // Monitor battery level for low battery warning
 useEffect(() => {
-  if (batteryLevel <= 40 && batteryLevel > 39.9) {
+  if (batteryLevel <= 40 && batteryLevel > 0) {
     // Show low battery warning modal
     setShowLowBatteryModal(true);
     
-    // Automatically set flight mode to Land
-    changeFlightMode('Land');
+    // No longer changing flight mode here since we're only displaying it
     
     // Add an alert
     updateAlertMessages({
@@ -296,8 +295,8 @@ const handleDirection = useCallback((direction) => {
   }
 }, [droneData]);
 
-// Height and yaw control handler - updated to directly update drone data in Firebase
-const handleHeightYaw = useCallback((action) => {
+// Height control handler (removed yaw controls)
+const handleHeight = useCallback((action) => {
   let updates = {};
   
   switch(action) {
@@ -309,14 +308,7 @@ const handleHeightYaw = useCallback((action) => {
       // Decrease throttle by 5%, ensuring it doesn't go below 0%
       updates.throttle = Math.max(0, droneData.throttlePercent - 5);
       break;
-    case 'rotateLeft':
-      // updates.yaw = ((droneData.yaw - 10) % 360 + 360) % 360;
-      break;
-    case 'rotateRight':
-      // updates.yaw = (droneData.yaw + 10) % 360;
-      break;
     case 'reset':
-      // updates.yaw = 0;
       updates.throttle = 0; // Reset throttle to default
       break;
     default:
@@ -328,9 +320,6 @@ const handleHeightYaw = useCallback((action) => {
     const localUpdates = {};
     if (updates.throttle !== undefined) {
       localUpdates.throttlePercent = updates.throttle;
-    }
-    if (updates.yaw !== undefined) {
-      // localUpdates.yaw = updates.yaw;
     }
     
     setDroneData(prevData => ({
@@ -345,7 +334,7 @@ const handleHeightYaw = useCallback((action) => {
     updateAlertMessages({
       id: Date.now(),
       type: 'info',
-      message: `Height/Yaw updated: ${Object.keys(updates).join(', ')}`,
+      message: `Height updated: ${Object.keys(updates).join(', ')}`,
       timestamp: new Date()
     });
   }
@@ -357,8 +346,8 @@ const handleGlobalReset = useCallback(() => {
   const updates = {
     pitch: 0,
     roll: 0,
-    yaw: 0,
     throttle: 0
+    // Removed yaw from reset
   };
   
   // Update local state first for immediate feedback
@@ -366,8 +355,8 @@ const handleGlobalReset = useCallback(() => {
     ...prevData,
     pitch: 0,
     roll: 0,
-    yaw: 0,
     throttlePercent: 0
+    // Removed yaw from reset
   }));
   
   // Update Firebase drone data directly
@@ -393,7 +382,7 @@ useEffect(() => {
     if (droneMode === 'auto') return;
 
     // Prevent default behavior for these keys to avoid scrolling etc.
-    if (['w', 'a', 's', 'd', 'i', 'j', 'k', 'l', ' ', '8', '2', '4', '6'].includes(e.key.toLowerCase())) {
+    if (['w', 'a', 's', 'd', 'i', 'k', ' ', '8', '2'].includes(e.key.toLowerCase())) {
       e.preventDefault();
     }
 
@@ -412,22 +401,14 @@ useEffect(() => {
         handleDirection('right');
         break;
         
-      // Height/Yaw controls (IJKL and numeric pad)
+      // Height controls only (no yaw controls)
       case 'i':
       case '8':
-        handleHeightYaw('up');
+        handleHeight('up');
         break;
       case 'k':
       case '2':
-        handleHeightYaw('down');
-        break;
-      case 'j':
-      case '4':
-        handleHeightYaw('rotateLeft');
-        break;
-      case 'l':
-      case '6':
-        handleHeightYaw('rotateRight');
+        handleHeight('down');
         break;
       
       // Space for global reset - Handle more directly for reliability
@@ -445,7 +426,7 @@ useEffect(() => {
   return () => {
     window.removeEventListener('keydown', keyHandler);
   };
-}, [handleDirection, handleHeightYaw, handleGlobalReset, droneMode]);
+}, [handleDirection, handleHeight, handleGlobalReset, droneMode]);
 
 // Check for low battery and add warning
 useEffect(() => {
@@ -463,13 +444,13 @@ useEffect(() => {
 // Get rotation style for orientation visualization
 const getRotationStyle = () => {
   // Ensure yaw, pitch, and roll are properly bounded for smooth visualization
-  
+  const normalizedYaw = 0;
   const normalizedPitch = ((droneData.pitch % 360) + 360) % 360;
   const normalizedRoll = ((droneData.roll % 360) + 360) % 360;
   
   // Note: Using positive yaw value for correct rotation direction
   return {
-    transform: `perspective(1000px) rotateX(${-normalizedPitch}deg) rotateY(${normalizedRoll}deg)`
+    transform: `perspective(1000px) rotateX(${-normalizedPitch}deg) rotateY(${normalizedRoll}deg) rotateZ(${normalizedYaw}deg)`
   };
 };
 
@@ -495,25 +476,7 @@ const toggleArm = () => {
   });
 };
 
-// Change flight mode
-const changeFlightMode = (mode) => {
-  // Update local state for immediate feedback
-  setDroneData(prevData => ({
-    ...prevData,
-    flightMode: mode
-  }));
-  
-  // Update Firebase controls directly
-  update(controlsRef, { flightMode: mode });
-  
-  // Add alert message
-  updateAlertMessages({
-    id: Date.now(),
-    type: 'info',
-    message: `Flight mode changed to ${mode}`,
-    timestamp: new Date()
-  });
-};
+// Flight Mode change function removed since we're only displaying now
 
 // Toggle auto/manual mode
 const toggleDroneMode = () => {
@@ -532,6 +495,9 @@ const toggleDroneMode = () => {
     message: `Drone mode changed to ${newMode}`,
     timestamp: new Date()
   });
+};
+const getActiveAlertCount = () => {
+  return alertMessages.length;
 };
 
 return (
@@ -856,12 +822,10 @@ return (
               />
             </div>
             
-            {/* Flight Mode Selection with improved styling */}
+            {/* Flight Mode Display (read-only) - CHANGED HERE */}
             <div className="col-span-2">
-              <FlightModeSelector 
+              <FlightModeDisplay
                 currentMode={droneData.flightMode}
-                modes={flightModes}
-                onChange={changeFlightMode}
               />
             </div>
             
@@ -1010,18 +974,16 @@ return (
               </div>
             </div>
             
-            {/* Height & Yaw Controls */}
+            {/* Height Controls (Removed Yaw) */}
             <div className="bg-gray-700 p-3 rounded-lg">
               <div className="text-blue-300 text-sm mb-2 text-center font-medium group relative">
                 Throttle
-                <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-80 text-white text-xs rounded p-2 -bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none w-48 z-10">
+                <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-80 text-white text-xs rounded p-2 -bottom-16 left-1/2 transform -translate-x-1/2 pointer-events-none w-48 z-10">
                   <div className="flex justify-between mb-1">
                     <span>I/8 - Increase 5%</span>
-                    <span>K/2 - Decrease 5%</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>J/4 - Rotate Left</span>
-                    <span>L/6 - Rotate Right</span>
+                    <span>K/2 - Decrease 5%</span>
                   </div>
                 </div>
               </div>
@@ -1030,7 +992,7 @@ return (
                 <div className="w-full flex justify-center">
                   <button 
                     className={`bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg ${droneMode === 'auto' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    onClick={(e) => {e.preventDefault(); if(droneMode === 'manual') handleHeightYaw('up');}}
+                    onClick={(e) => {e.preventDefault(); if(droneMode === 'manual') handleHeight('up');}}
                     title="I/8 - Up"
                     disabled={droneMode === 'auto'}
                   >
@@ -1038,33 +1000,15 @@ return (
                   </button>
                 </div>
                 
-                {/* Middle row (Left arrow, RESET, Right arrow) */}
-                <div className="w-full flex justify-between items-center">
-                  <button 
-                    className={`bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg ${droneMode === 'auto' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    onClick={(e) => {e.preventDefault(); if(droneMode === 'manual') handleHeightYaw('rotateLeft');}}
-                    title="J/4 - Rotate Left"
-                    disabled={droneMode === 'auto'}
-                  >
-                    <div className="w-0 h-0 border-t-[10px] border-b-[10px] border-r-[15px] border-t-transparent border-b-transparent border-r-white"></div>
-                  </button>
-                  
+                {/* Middle row (RESET only) */}
+                <div className="w-full flex justify-center items-center">
                   <button 
                     className={`bg-blue-800 hover:bg-blue-700 text-white w-12 h-12 flex items-center justify-center rounded-lg text-xs ${droneMode === 'auto' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    onClick={(e) => {e.preventDefault(); if(droneMode === 'manual') handleHeightYaw('reset');}}
-                    title="Reset Height/Yaw"
+                    onClick={(e) => {e.preventDefault(); if(droneMode === 'manual') handleHeight('reset');}}
+                    title="Reset Height"
                     disabled={droneMode === 'auto'}
                   >
                     RESET
-                  </button>
-                  
-                  <button 
-                    className={`bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg ${droneMode === 'auto' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    onClick={(e) => {e.preventDefault(); if(droneMode === 'manual') handleHeightYaw('rotateRight');}}
-                    title="L/6 - Rotate Right"
-                    disabled={droneMode === 'auto'}
-                  >
-                    <div className="w-0 h-0 border-t-[10px] border-b-[10px] border-l-[15px] border-t-transparent border-b-transparent border-l-white"></div>
                   </button>
                 </div>
                 
@@ -1072,7 +1016,7 @@ return (
                 <div className="w-full flex justify-center">
                   <button 
                     className={`bg-blue-600 hover:bg-blue-500 text-white w-12 h-12 flex items-center justify-center rounded-lg ${droneMode === 'auto' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    onClick={(e) => {e.preventDefault(); if(droneMode === 'manual') handleHeightYaw('down');}}
+                    onClick={(e) => {e.preventDefault(); if(droneMode === 'manual') handleHeight('down');}}
                     title="K/2 - Down"
                     disabled={droneMode === 'auto'}
                   >
@@ -1199,22 +1143,17 @@ return (
 );
 };
 
-// Flight Mode Selector Component
-const FlightModeSelector = ({ currentMode, modes, onChange }) => {
-return (
-  <div>
-    <div className="text-blue-300 text-sm mb-1">Flight Mode</div>
-    <select 
-      className="bg-gray-700 border border-gray-600 text-white w-full py-2 px-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-      value={currentMode}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {modes.map(mode => (
-        <option key={mode} value={mode}>{mode}</option>
-      ))}
-    </select>
-  </div>
-);
+// Flight Mode Display Component (read-only) - NEW COMPONENT
+const FlightModeDisplay = ({ currentMode }) => {
+  return (
+    <div>
+      <div className="text-blue-300 text-sm mb-1">Flight Mode</div>
+      <div className="bg-gray-700 border border-gray-600 text-white w-full py-2 px-4 rounded-lg flex items-center">
+        <div className="w-3 h-3 rounded-full bg-blue-400 mr-2"></div>
+        <span>{currentMode}</span>
+      </div>
+    </div>
+  );
 };
 
 // Arm/Disarm Button Component
